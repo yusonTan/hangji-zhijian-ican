@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>航迹智判 - AIS航迹异常识别与风险研判助手</title>
+<style>
+:root{--blue:#0b5394;--red:#d33;--bg:#f6f8fb;--card:#fff;--bord:#dfe5ee}
+*{box-sizing:border-box}
+body{font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;
+margin:0;background:var(--bg);color:#222;line-height:1.55}
+header{background:#0b2e52;color:#fff;padding:18px 28px}
+header h1{margin:0;font-size:22px}
+header p{margin:4px 0 0;opacity:.85;font-size:13px}
+.wrap{max-width:1180px;margin:0 auto;padding:20px 28px 60px}
+.disc{background:#fff8e1;border:1px solid #f0d264;border-radius:8px;
+padding:8px 14px;font-size:13px;margin:14px 0}
+.controls{background:var(--card);border:1px solid var(--bord);border-radius:10px;
+padding:16px 18px;margin:14px 0;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.btn{background:var(--blue);color:#fff;border:none;border-radius:6px;
+padding:9px 18px;font-size:14px;cursor:pointer}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.btn.sec{background:#fff;color:var(--blue);border:1px solid var(--blue)}
+input[type=file]{font-size:13px}
+label.sample{font-size:14px;cursor:pointer;display:flex;align-items:center;gap:6px}
+.card{background:var(--card);border:1px solid var(--bord);border-radius:10px;
+padding:16px 18px;margin:14px 0}
+.card h2{margin:0 0 10px;font-size:16px;color:#0b2e52}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.gitem{background:#f0f5fb;border-radius:8px;padding:10px 12px}
+.gitem .k{font-size:12px;color:#666}.gitem .v{font-size:17px;font-weight:700;color:#0b2e52}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{border:1px solid #dbe3ee;padding:6px 8px;text-align:left}
+th{background:#eef4fb;white-space:nowrap}
+tr:hover td{background:#f7fafd}
+.badge{padding:2px 8px;border-radius:10px;font-size:12px;color:#fff}
+.b-low{background:#4a8a3f}.b-medium{background:#e6a23c}
+.b-high{background:#e0603f}.b-极高{background:#b02418}
+.b-high,.b-极高{background:#c0392b}
+.riskline{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px}
+.rk{border:1px solid var(--bord);border-radius:8px;padding:10px 14px;min-width:170px;background:#fff}
+.rk .m{font-weight:700}.rk .lv{margin:4px 0;font-size:13px}
+.ev{margin:8px 0;padding:8px 12px;background:#f7fafd;border-left:3px solid var(--blue);font-size:13px}
+.ev b{color:#0b2e52}
+#traj{margin-top:6px}
+.trajectory-fallback{width:100%;overflow:hidden;border:1px solid #dbe3ee;border-radius:8px;background:#f8fbff}
+.trajectory-fallback svg{display:block;width:100%;height:auto;min-height:440px}
+.map-caption{padding:7px 12px;border-top:1px solid #e5ebf3;color:#667085;font-size:12px;background:#fff}
+.loader{display:none;color:#0b5394;font-weight:600}
+.issue{font-size:13px;padding:4px 0}
+.issue .e{color:var(--red)}.issue .w{color:#b9770e}.issue .i{color:#555}
+.hidden{display:none}
+.dl a{margin-right:14px;font-size:14px}
+.agent-card{border-color:#b9cce4;background:linear-gradient(135deg,#f8fbff 0%,#fff 70%)}
+.agent-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.agent-status{font-size:12px;color:#17653a;background:#e8f6ed;border-radius:12px;padding:3px 9px;white-space:nowrap}
+.quick{display:flex;gap:7px;flex-wrap:wrap;margin:10px 0}
+.quick button{border:1px solid #b9cce4;background:#fff;color:#174a7e;border-radius:14px;padding:5px 10px;cursor:pointer;font-size:12px}
+.chat-log{height:240px;overflow:auto;border:1px solid #dce5f0;border-radius:8px;background:#f7f9fc;padding:10px}
+.msg{max-width:88%;margin:7px 0;padding:8px 11px;border-radius:9px;white-space:pre-wrap;font-size:13px}
+.msg.agent{background:#fff;border:1px solid #d9e2ee}
+.msg.user{background:#dbeafe;margin-left:auto;color:#123d68}
+.tool-chip{display:inline-block;margin:4px 5px 0 0;padding:2px 7px;border-radius:10px;background:#edf2f7;color:#526273;font-size:11px}
+.chat-row{display:flex;gap:8px;margin-top:9px}
+.chat-row input{flex:1;border:1px solid #b8c5d6;border-radius:7px;padding:9px 11px;font-size:14px}
+.chat-files a{display:inline-block;margin:5px 10px 0 0}
+footer{color:#888;font-size:12px;text-align:center;margin-top:30px}
+code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <h1>航迹智判 · AIS 航迹异常识别与风险研判智能体</h1>
+  <p>对话式研判 v0.2 ｜ R1–R8 可解释证据 ｜ 因果轨迹预测 ｜ 不替代真实海事安全决策</p>
+</header>
+<div class="wrap">
+  <div class="disc" id="disc">免责声明：本工具为 <b>教学/科研辅助演示</b>，规则阈值与方法仅供学习复现，<b>不构成任何海事安全决策依据</b>。合成数据用于可控规则验证；NOAA 公开案例无异常真值且采样稀疏，仅用于兼容性验证。</div>
+
+  <div class="controls">
+    <label class="sample"><input type="radio" name="src" value="sample" checked> 使用内置合成数据（7 艘船 / R1–R8 可控验证）</label>
+    <label class="sample"><input type="radio" name="src" value="public"> NOAA 2018 公开 AIS 案例（无异常真值 / 稀疏采样）</label>
+    <label class="sample"><input type="radio" name="src" value="upload"> 上传自己的 CSV</label>
+    <input type="file" id="file" accept=".csv" class="hidden">
+    <button class="btn" id="btnRun">开始分析</button>
+    <button class="btn sec hidden" id="btnReport">导出研判报告</button>
+    <span class="loader" id="loader">分析中…</span>
+    <span id="err" style="color:#c0392b;font-size:13px"></span>
+  </div>
+
+  <div class="card agent-card">
+    <div class="agent-head"><div><h2>对话式研判智能体</h2>
+      <div style="font-size:13px;color:#5d6b7a">智能体会选择分析、风险查询、证据链或报告工具，回答只引用当前数据。</div></div>
+      <span class="agent-status">● 公网演示可用</span></div>
+    <div class="quick">
+      <button data-chat="分析内置示例">分析内置示例</button>
+      <button data-chat="分析 NOAA 公开案例">分析公开案例</button>
+      <button data-chat="总结当前风险">总结风险</button>
+      <button data-chat="为什么 412000007 是极高风险？">解释指定船舶</button>
+      <button data-chat="解释 R8 预测偏差">解释 R8</button>
+      <button data-chat="生成研判报告">生成报告</button>
+    </div>
+    <div id="chatLog" class="chat-log"><div class="msg agent">你好，我是航迹智判智能体。可以直接说“分析内置示例”，或在分析后询问某个 9 位 MMSI 的风险依据。</div></div>
+    <div class="chat-row"><input id="chatInput" placeholder="例如：为什么 412000007 是极高风险？">
+      <button class="btn" id="chatSend">发送</button></div>
+  </div>
+
+  <div id="main" class="hidden">
+    <div class="card" id="secPool"></div>
+    <div class="card"><h2>② 数据质量检查</h2><div id="quality"></div></div>
+    <div class="card"><h2>③ R8 因果轨迹预测</h2><div id="prediction"></div></div>
+    <div class="card"><h2>④ 轨迹可视化（航速着色，红色标记为异常片段）</h2><div id="traj"></div></div>
+    <div class="card"><h2>⑤ 异常片段清单（可解释规则 R1–R8）</h2><div id="anoms"></div></div>
+    <div class="card"><h2>⑥ 风险分级与证据解释</h2><div id="risks"></div></div>
+    <div class="card"><h2>⑦ 规则参数与扩展接口状态</h2><div id="cfg"></div></div>
+  </div>
+
+  <footer>航迹智判 v0.2 ｜ R8 因果预测已启用 ｜ SFL 暂未启用 ｜ AI辅助制作 ｜ 公网静态演示不上传用户数据</footer>
+</div>
+
+<script src="./plotly.min.js?v=2.35.2"></script>
+<script>
+let RESULT = null;
+let STATIC_CONFIG = null;
+const $ = id => document.getElementById(id);
+
+document.querySelectorAll('input[name=src]').forEach(r => r.onchange = () => {
+  $('file').classList.toggle('hidden', r.value !== 'upload');
+  $('err').textContent = '';
+});
+
+$('btnRun').onclick = async () => {
+  const src = document.querySelector('input[name=src]:checked').value;
+  $('err').textContent = '';
+  if (src === 'upload') {
+    $('err').textContent = '公网静态演示不上传用户数据；自有 CSV 的完整 R1–R8 分析请使用提交包内本地版。';
+    return;
+  }
+  $('loader').style.display = 'inline'; $('btnRun').disabled = true;
+  try {
+    const resp = await fetch(src === 'public' ? './data/public_result.json' : './data/sample_result.json');
+    const j = await resp.json();
+    if (!resp.ok) throw new Error('演示数据加载失败');
+    render(j);
+    RESULT = j;
+    $('btnReport').classList.remove('hidden');
+  } catch (e) { $('err').textContent = e.message; }
+  finally { $('loader').style.display = 'none'; $('btnRun').disabled = false; }
+};
+
+$('btnReport').onclick = async () => {
+  try {
+    if (!RESULT) throw new Error('请先执行分析再导出报告');
+    const j = {files: buildReportFiles(RESULT)};
+    let s = '报告已生成：';
+    j.files.forEach(f => s += `<a href="${f.url}" download="${f.name}">${f.name}</a>`);
+    $('err').innerHTML = s;
+  } catch (e) { $('err').textContent = e.message; }
+};
+
+function addMessage(kind, text, tools=[], files=[]) {
+  const box = document.createElement('div');
+  box.className = `msg ${kind}`;
+  const body = document.createElement('div');
+  body.textContent = text;
+  box.appendChild(body);
+  if (tools.length) {
+    const chips = document.createElement('div');
+    tools.forEach(tool => {
+      const chip = document.createElement('span');
+      chip.className = 'tool-chip';
+      chip.textContent = `工具：${tool}`;
+      chips.appendChild(chip);
+    });
+    box.appendChild(chips);
+  }
+  if (files.length) {
+    const links = document.createElement('div');
+    links.className = 'chat-files';
+    files.forEach(file => {
+      const a = document.createElement('a');
+      a.href = file.url;
+      a.download = file.name;
+      a.textContent = file.name;
+      links.appendChild(a);
+    });
+    box.appendChild(links);
+  }
+  $('chatLog').appendChild(box);
+  $('chatLog').scrollTop = $('chatLog').scrollHeight;
+}
+
+async function sendChat(message='') {
+  const text = (message || $('chatInput').value).trim();
+  if (!text) return;
+  addMessage('user', text);
+  $('chatInput').value = '';
+  $('chatSend').disabled = true;
+  try {
+    const j = await staticAgent(text);
+    if (j.result) {
+      RESULT = j.result;
+      render(j.result);
+      $('btnReport').classList.remove('hidden');
+    }
+    const answer = j.data_boundary ? `${j.answer}\n\n数据边界：${j.data_boundary}` : j.answer;
+    addMessage('agent', answer, j.tools_used || [], j.files || []);
+  } catch (e) {
+    addMessage('agent', `调用失败：${e.message}`);
+  } finally {
+    $('chatSend').disabled = false;
+  }
+}
+
+$('chatSend').onclick = () => sendChat();
+$('chatInput').onkeydown = e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
+};
+document.querySelectorAll('.quick button').forEach(btn => {
+  btn.onclick = () => sendChat(btn.dataset.chat || btn.textContent);
+});
+
+async function loadStaticConfig() {
+  if (STATIC_CONFIG) return STATIC_CONFIG;
+  const resp = await fetch('./data/config.json');
+  if (!resp.ok) throw new Error('规则配置加载失败');
+  STATIC_CONFIG = await resp.json();
+  return STATIC_CONFIG;
+}
+
+async function loadStaticResult(kind) {
+  const resp = await fetch(kind === 'public' ? './data/public_result.json' : './data/sample_result.json');
+  if (!resp.ok) throw new Error('演示数据加载失败');
+  return await resp.json();
+}
+
+async function staticAgent(text) {
+  const wantsPublic = text.includes('公开') || text.includes('NOAA');
+  const wantsAnalysis = ['分析','示例','开始','运行'].some(k => text.includes(k));
+  let result = RESULT;
+  const tools = [];
+  if (wantsAnalysis || !result) {
+    result = await loadStaticResult(wantsPublic ? 'public' : 'sample');
+    tools.push(wantsPublic ? 'analyze_public_noaa_case' : 'analyze_sample');
+  }
+  const publicMode = (result.context || {}).risk_scoring_allowed === false;
+  let answer = '';
+  if (text.includes('报告')) {
+    const files = buildReportFiles(result);
+    answer = '已基于当前分析结果生成 Markdown、异常清单 CSV 和完整 JSON 三件套。';
+    tools.push('generate_report');
+    return {answer, tools_used:tools, files, result: wantsAnalysis ? result : null,
+      data_boundary: publicMode ? 'NOAA 公开案例无异常真值且采样稀疏，本模式不执行 R1–R8 风险评分。' : '内置数据为合成场景，只用于可控验证规则召回。'};
+  }
+  if (publicMode) {
+    answer = `已完成 NOAA 公开案例兼容性分析：${result.data_pool.ships} 艘船、${result.data_pool.points} 条有效观测。该子集无异常真值且采样稀疏，因此禁用连续航迹风险评分，不能将本案例解释为识别准确率。`;
+    tools.push('summarize_public_boundary');
+  } else if (text.includes('412000007')) {
+    const ship = result.risks.find(r => String(r.mmsi) === '412000007');
+    const rows = result.anomalies.filter(a => String(a.mmsi) === '412000007');
+    answer = `船舶 412000007 的风险等级为${ship ? ship.level : '未知'}、得分 ${ship ? ship.score : '-'}。证据链包含 ${rows.map(x => x.rule + ' ' + x.rule_name).join('、')}；其中超速、位置跳变和航向突变共同抬高风险。`;
+    tools.push('get_ship_risk','list_evidence');
+  } else if (text.includes('R8') || text.includes('预测')) {
+    const pred = result.prediction || {};
+    answer = `R8 采用严格因果的上一时刻 SOG/COG 外推，阈值 ${Number(pred.threshold_m || 0).toFixed(0)} 米；本次检出 ${pred.anomaly_count || 0} 个预测偏差片段，涉及 ${(pred.ships || []).join('、') || '0'}。模型不读取未来点。`;
+    tools.push('get_prediction_status','list_r8_evidence');
+  } else {
+    const top = (result.risks || []).slice().sort((a,b)=>b.score-a.score).slice(0,3);
+    answer = `分析完成：${result.data_pool.ships} 艘船、${result.data_pool.points} 条有效报文，共检出 ${result.anomalies.length} 个异常片段。最高风险船舶为 ${top.map(x => `${x.mmsi}（${x.level}/${x.score}分）`).join('、')}。`;
+    tools.push('summarize_risk');
+  }
+  return {answer, tools_used:tools, files:[], result: wantsAnalysis ? result : null,
+    data_boundary: publicMode ? 'NOAA 公开案例无异常真值且采样稀疏，本模式不执行 R1–R8 风险评分。' : '内置数据为合成场景，只用于可控验证规则召回。'};
+}
+
+function makeDownload(name, content, type) {
+  return {name, url: URL.createObjectURL(new Blob([content], {type}))};
+}
+
+function buildReportFiles(result) {
+  const lines = [
+    '# 航迹智判研判报告', '',
+    `- 数据来源：${result.data_pool.source}`,
+    `- 船舶数：${result.data_pool.ships}`,
+    `- 有效报文数：${result.data_pool.points}`,
+    `- 异常片段数：${result.anomalies.length}`, '',
+    '## 风险分级',
+    ...(result.risks || []).map(r => `- ${r.mmsi}：${r.level}，${r.score} 分，${r.anomaly_count} 条异常`), '',
+    '## 数据边界',
+    (result.context || {}).risk_scoring_allowed === false ? 'NOAA 公开案例无异常真值且采样稀疏，未执行风险评分。' : '内置数据为合成场景，仅用于可控验证。', '',
+    '> 免责声明：本报告仅用于教学/科研辅助演示，不构成任何海事安全决策依据。'
+  ];
+  const header = 'mmsi,rule,rule_name,severity,start_time,end_time,message';
+  const quote = value => `"${String(value ?? '').replaceAll('"','""')}"`;
+  const csv = [header, ...(result.anomalies || []).map(a => [a.mmsi,a.rule,a.rule_name,a.severity,a.start_time,a.end_time,a.message].map(quote).join(','))].join('\n');
+  return [
+    makeDownload('航迹智判_研判报告.md', lines.join('\n'), 'text/markdown;charset=utf-8'),
+    makeDownload('航迹智判_异常清单.csv', '\ufeff' + csv, 'text/csv;charset=utf-8'),
+    makeDownload('航迹智判_完整结果.json', JSON.stringify(result,null,2), 'application/json;charset=utf-8')
+  ];
+}
+
+function render(j) {
+  $('main').classList.remove('hidden');
+  const p = j.data_pool;
+  $('secPool').innerHTML = `<h2>① 数据池</h2>
+    <div class="grid">
+      <div class="gitem"><div class="k">船舶数</div><div class="v">${p.ships}</div></div>
+      <div class="gitem"><div class="k">有效报文数</div><div class="v">${p.points}</div></div>
+      <div class="gitem"><div class="k">起始时间</div><div class="v" style="font-size:13px">${esc(p.time_start||'-')}</div></div>
+      <div class="gitem"><div class="k">结束时间</div><div class="v" style="font-size:13px">${esc(p.time_end||'-')}</div></div>
+    </div><p style="font-size:13px;color:#666">来源：${esc(p.source)}</p>`;
+
+  const q = j.quality;
+  $('quality').innerHTML = `<div class="issue">${q.ok ? '✅ 通过（无阻断性问题）' : '⛔ 存在阻断性问题，分析已终止'}</div>` +
+    q.issues.map(i => `<div class="issue"><span class="${i.severity[0]}">[${i.severity}]</span> ${esc(i.message)}（数量 ${i.count}）</div>`).join('');
+
+  const pred = j.prediction || {};
+  $('prediction').innerHTML = pred.evaluation_suppressed ?
+    '<p class="issue">ℹ️ R8 模型已加载，但当前公开案例为稀疏抽样，不满足连续预测评估前提；本次未计算预测偏差。</p>' : pred.enabled ?
+    `<div class="grid">
+      <div class="gitem"><div class="k">模型</div><div class="v" style="font-size:15px">${esc(String(pred.model_version || '-'))}</div></div>
+      <div class="gitem"><div class="k">预测偏差片段</div><div class="v">${Number(pred.anomaly_count ?? pred.segments ?? 0)}</div></div>
+      <div class="gitem"><div class="k">涉及船舶</div><div class="v">${(pred.ships || []).length}</div></div>
+      <div class="gitem"><div class="k">R8 阈值</div><div class="v">${Number(pred.threshold_m || 0).toFixed(0)} m</div></div>
+    </div><p style="font-size:13px;color:#666">严格因果：只使用上一时刻 SOG/COG 外推，不读取未来点；这是可解释基线，不是已训练的深度学习模型。</p>` :
+    '<p style="color:#666">轨迹预测未启用。</p>';
+
+  $('traj').innerHTML = '';
+  try {
+    const spec = JSON.parse(j.trajectory_json || '{}');
+    if (typeof Plotly === 'undefined') throw new Error('Plotly 未加载');
+    Plotly.newPlot('traj', spec.data, spec.layout, {displaylogo:false, responsive:true});
+  } catch (e) {
+    try { renderTrajectorySvg(JSON.parse(j.trajectory_json || '{}')); }
+    catch (_) { $('traj').innerHTML = '<p style="color:#c0392b">轨迹图数据为空，无法渲染。</p>'; }
+  }
+
+  if (q.ok) {
+    const a = j.anomalies;
+    const scoringAllowed = (j.context || {}).risk_scoring_allowed !== false;
+    $('anoms').innerHTML = !scoringAllowed ?
+      '公开案例为稀疏抽样且无异常真值，本模式未执行 R1–R8 风险规则。' : a.length === 0 ? '未检出异常片段。' :
+      `<table><tr><th>MMSI</th><th>规则</th><th>严重度</th><th>时间窗</th><th>证据解释</th></tr>` +
+      a.map(x => `<tr><td>${x.mmsi}</td><td>${x.rule} ${x.rule_name}</td>
+        <td><span class="badge b-${x.severity}">${x.severity}</span></td>
+        <td>${esc(x.start_time)} ~ ${esc(x.end_time)}</td><td>${esc(x.message)}</td></tr>`).join('') + '</table>';
+
+    $('risks').innerHTML = !scoringAllowed ?
+      '为避免把抽样间隔误判为 AIS 静默，公开案例不生成风险分数与等级。' : `<div class="riskline">` + j.risks.map(r =>
+      `<div class="rk"><div class="m">船 ${r.mmsi}</div>
+       <div class="lv"><span class="badge b-${r.level}">${r.level}</span> 得分 ${r.score}（异常 ${r.anomaly_count} 条）</div>
+       <div style="font-size:12px;color:#666">Top3 依据：${r.top3.length ? r.top3.map(t=>t.rule_name+'('+t.score+')').join('、') : '无'}</div></div>`).join('') + '</div>';
+
+    $('cfg').innerHTML = `<table><tr><th>规则</th><th>参数</th></tr>` +
+      Object.keys(j.rules||{}).map(k => `<tr><td>${k} ${j.rules[k].name}</td><td>${JSON.stringify(j.rules[k])}</td></tr>`).join('') + '</table>';
+  } else {
+    $('anoms').innerHTML = ''; $('risks').innerHTML = ''; $('cfg').innerHTML = '';
+  }
+
+  // 规则参数与接口状态
+  loadStaticConfig().then(cfg => {
+    $('cfg').innerHTML = '<table><tr><th>规则</th><th>默认参数</th></tr>' +
+      Object.keys(cfg.rules).map(k => `<tr><td>${k} ${cfg.rules[k].name}</td><td><code>${JSON.stringify(cfg.rules[k])}</code></td></tr>`).join('') +
+      `</table><p style="font-size:13px;color:#666">${esc(cfg.model)}<br>${esc(cfg.sfl)}</p>`;
+  });
+}
+
+function decodeVector(value) {
+  if (Array.isArray(value)) return value.map(Number);
+  if (!value || typeof value !== 'object' || !value.bdata) return [];
+  const bytes = Uint8Array.from(atob(value.bdata), c => c.charCodeAt(0));
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const dtype = String(value.dtype || 'f8');
+  const code = dtype.replace(/[<>=|]/g, '');
+  const little = !dtype.startsWith('>');
+  const readers = {
+    f8:[8,'getFloat64'], f4:[4,'getFloat32'],
+    i4:[4,'getInt32'], u4:[4,'getUint32'],
+    i2:[2,'getInt16'], u2:[2,'getUint16'],
+    i1:[1,'getInt8'],  u1:[1,'getUint8']
+  };
+  const entry = readers[code];
+  if (!entry) return [];
+  const [size, method] = entry;
+  const out = [];
+  for (let offset = 0; offset + size <= bytes.byteLength; offset += size) {
+    out.push(size === 1 ? view[method](offset) : view[method](offset, little));
+  }
+  return out;
+}
+
+function renderTrajectorySvg(spec) {
+  const traces = (spec.data || []).map(t => ({
+    name: String(t.name || '未命名航迹'),
+    lon: decodeVector(t.lon),
+    lat: decodeVector(t.lat)
+  })).filter(t => t.lon.length && t.lat.length);
+  const allLon = traces.flatMap(t => t.lon).filter(Number.isFinite);
+  const allLat = traces.flatMap(t => t.lat).filter(Number.isFinite);
+  if (!allLon.length || !allLat.length) {
+    $('traj').innerHTML = '<p style="color:#c0392b">轨迹图数据为空，无法渲染。</p>';
+    return;
+  }
+  const width = 1080, height = 560, left = 62, right = 28, top = 50, bottom = 58;
+  const minLon = Math.min(...allLon), maxLon = Math.max(...allLon);
+  const minLat = Math.min(...allLat), maxLat = Math.max(...allLat);
+  const dx = Math.max(maxLon - minLon, 1e-9), dy = Math.max(maxLat - minLat, 1e-9);
+  const x = lon => left + (lon - minLon) / dx * (width - left - right);
+  const y = lat => top + (maxLat - lat) / dy * (height - top - bottom);
+  const palette = ['#1664a7','#1b8a5a','#8e44ad','#d97706','#0f766e','#475569','#e11d48'];
+  let grid = '', labels = '';
+  for (let i = 0; i <= 5; i++) {
+    const gx = left + i * (width-left-right) / 5;
+    const gy = top + i * (height-top-bottom) / 5;
+    grid += `<line x1="${gx}" y1="${top}" x2="${gx}" y2="${height-bottom}" stroke="#dce6f2"/>`;
+    grid += `<line x1="${left}" y1="${gy}" x2="${width-right}" y2="${gy}" stroke="#dce6f2"/>`;
+    labels += `<text x="${gx}" y="${height-bottom+24}" text-anchor="middle">${(minLon+i*dx/5).toFixed(3)}°E</text>`;
+    labels += `<text x="${left-10}" y="${gy+4}" text-anchor="end">${(maxLat-i*dy/5).toFixed(3)}°N</text>`;
+  }
+  let paths = '', points = '', legend = '';
+  let normalIndex = 0;
+  traces.forEach((t) => {
+    const n = Math.min(t.lon.length, t.lat.length);
+    if (t.name.includes('异常')) {
+      for (let i = 0; i < n; i++) {
+        const px=x(t.lon[i]), py=y(t.lat[i]);
+        paths += `<path d="M${px-7},${py-7} L${px+7},${py+7} M${px+7},${py-7} L${px-7},${py+7}" stroke="#d32f2f" stroke-width="3"/>`;
+      }
+      return;
+    }
+    const color = palette[normalIndex % palette.length];
+    const coords = [];
+    for (let i = 0; i < n; i++) {
+      if (Number.isFinite(t.lon[i]) && Number.isFinite(t.lat[i])) {
+        coords.push(`${x(t.lon[i]).toFixed(1)},${y(t.lat[i]).toFixed(1)}`);
+        if (i % 4 === 0) points += `<circle cx="${x(t.lon[i]).toFixed(1)}" cy="${y(t.lat[i]).toFixed(1)}" r="2.1" fill="${color}"/>`;
+      }
+    }
+    paths += `<polyline points="${coords.join(' ')}" fill="none" stroke="${color}" stroke-width="2.4" stroke-linejoin="round"/>`;
+    const lx = left + (normalIndex % 4) * 235;
+    const ly = 24 + Math.floor(normalIndex / 4) * 20;
+    legend += `<line x1="${lx}" y1="${ly}" x2="${lx+24}" y2="${ly}" stroke="${color}" stroke-width="3"/><text x="${lx+30}" y="${ly+4}">${esc(t.name)}</text>`;
+    normalIndex++;
+  });
+  legend += `<path d="M${width-160},17 L${width-146},31 M${width-146},17 L${width-160},31" stroke="#d32f2f" stroke-width="3"/><text x="${width-137}" y="28">异常片段</text>`;
+  $('traj').innerHTML = `<div class="trajectory-fallback"><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="AIS 船舶轨迹图">
+    <rect width="${width}" height="${height}" fill="#f8fbff"/>${grid}
+    <rect x="${left}" y="${top}" width="${width-left-right}" height="${height-top-bottom}" fill="none" stroke="#9db0c8"/>
+    <g font-size="12" fill="#526273">${labels}${legend}</g>${paths}${points}
+    <text x="${width/2}" y="${height-10}" text-anchor="middle" font-size="12" fill="#526273">经度</text>
+    <text x="15" y="${height/2}" transform="rotate(-90 15 ${height/2})" text-anchor="middle" font-size="12" fill="#526273">纬度</text>
+  </svg><div class="map-caption">离线兼容轨迹图：彩色折线为各船航迹，红色 × 为异常片段；无需地图瓦片即可用于现场演示。</div></div>`;
+}
+
+function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+</script>
+</body>
+</html>
